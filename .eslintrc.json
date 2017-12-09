@@ -1,0 +1,23 @@
+{
+  "extends": ["airbnb-base"],
+  "rules": {
+    "object-shorthand": "off",
+    "arrow-body-style": "warn",
+    "comma-dangle": "off",
+    "class-methods-use-this": "off",
+    "padded-blocks": "off",
+    "no-restricted-syntax": "warn"
+  },
+  "env": {
+    "node": true,
+    "mocha": true
+  },
+   "plugins": [
+     "react"
+   ],
+   "parserOptions": {
+     "ecmaFeatures": {
+       "jsx": true
+     }
+   }
+}

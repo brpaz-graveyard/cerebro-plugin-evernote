@@ -1,0 +1,42 @@
+{
+  "name": "cerebro-plugin-evernote",
+  "description": "Cerebro plugin for evernote",
+  "version": "0.1.0",
+  "author": {
+    "name": "Bruno Paz",
+    "email": "brunopaz@sapo.pt"
+  },
+  "repository": {
+    "url": "https://github.com/brpaz/cerebro-plugin-evernote"
+  },
+  "dependencies": {
+    "cerebro-tools": "^0.1.8",
+    "cerebro-ui": "^0.0.16",
+    "debounce": "^1.1.0",
+    "evernote": "^2.0.3",
+    "lodash": "^4.17.4",
+    "react-frame-component": "^2.0.0"
+  },
+  "devDependencies": {
+    "cerebro-scripts": "0.0.20",
+    "chai": "^4.1.2",
+    "eslint": "^4.12.0",
+    "eslint-config-airbnb-base": "^12.1.0",
+    "eslint-config-base": "^1.0.0",
+    "eslint-plugin-import": "^2.8.0",
+    "eslint-plugin-react": "^7.5.1",
+    "mocha": "^4.0.1"
+  },
+  "main": "dist/index.js",
+  "keywords": [
+    "cerebro",
+    "cerebro-plugin"
+  ],
+  "scripts": {
+    "start": "cerebro-scripts start",
+    "build": "cerebro-scripts build",
+    "lint": "./node_modules/.bin/eslint .",
+    "test": "mocha --require ./test/setup.js"
+  },
+  "license": "MIT"
+}

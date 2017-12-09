@@ -1,0 +1,9 @@
+{
+  "generator-cerebro-plugin": {
+    "promptValues": {
+      "authorName": "Bruno Paz",
+      "authorEmail": "brunopaz@sapo.pt",
+      "gitUser": "brpaz"
+    }
+  }
+}
