@@ -3,17 +3,16 @@ const PLUGIN_NAME = 'Evernote';
 const PLUGIN_KEYWORD = 'evernote';
 const PLUGIN_REGEX = /evernote\s(.*)/;
 
+const _ = require('lodash');
+
 const icon = require('../assets/icon.png');
 const EvernoteService = require('./evernoteService');
 
+/**
+ * Preview components
+ */
 const { Preload, Loading } = require('cerebro-ui');
 const NoteContents = require('./Preview/NoteContents');
-
-const NotePreview = (key, promise) => (
-  <Preload key={key} promise={promise}>
-    {(promiseResult) => <NoteContents key={key} contents={promiseResult} /> }
-  </Preload >
-);
 
 const displayLoader = (display) => {
   display({
@@ -53,7 +52,7 @@ const displayMainMenu = (display, actions) => {
   display(menu);
 };
 
-const searchNotes = (term, display, actions, settings, hide) => {
+const searchNotes = _.debounce((term, display, actions, settings, hide) => {
 
   const evernoteService = new EvernoteService(settings.accessToken, settings.sandbox);
 
@@ -61,13 +60,9 @@ const searchNotes = (term, display, actions, settings, hide) => {
 
   displayLoader(display);
 
-  /*evernoteService.getUser().then((user) => {
-    console.log(user);
-  });*/
-
   Promise.all([
-      evernoteService.getUser(),
-      evernoteService.searchNotes(term)
+    evernoteService.getUser(),
+    evernoteService.searchNotes(term)
   ]).then((values) => {
     const user = values[0];
     const notesList = values[1];
@@ -91,22 +86,25 @@ const searchNotes = (term, display, actions, settings, hide) => {
           },
           getPreview: () => {
             const promise = evernoteService.getNoteContent(note.guid);
-            return NotePreview(note.guid, promise);
+            return <Preload key={note.guid} promise={promise}>
+              {(promiseResult) => <NoteContents key={note.guid} contents={promiseResult} />}
+            </Preload >
           }
         };
       });
       display(results, actions);
     }
   }).catch((err) => {
+    hideLoader(hide);
     display({
       icon: icon,
-      title: 'Error fetching results from Evernote',
-      subtitle: err
+      title: 'Evernote Error',
+      subtitle: err.message
     });
   });
-};
+}, 200);
 
-const listNotebooks = (term, display, actions, settings, hide) => {
+const listNotebooks = _.debounce((term, display, actions, settings, hide) => {
 
   const evernoteService = new EvernoteService(settings.accessToken, settings.sandbox);
 
@@ -140,14 +138,13 @@ const listNotebooks = (term, display, actions, settings, hide) => {
 
     display({
       icon: icon,
-      title: 'Error fetching results from Evernote',
-      subtitle: err
+      title: 'Evernote Error',
+      subtitle: err.message
     });
   });
-};
+}, 200);
 
-
-const listTags = (term, display, actions, settings, hide) => {
+const listTags = _.debounce((term, display, actions, settings, hide) => {
 
   const evernoteService = new EvernoteService(settings.accessToken, settings.sandbox);
 
@@ -181,11 +178,11 @@ const listTags = (term, display, actions, settings, hide) => {
 
     display({
       icon: icon,
-      title: 'Error fetching results from Evernote',
-      subtitle: err
+      title: 'Evernote Error',
+      subtitle: err.message
     });
   });
-};
+}, 200);
 
 /**
  * Plugin entrypoint.
@@ -196,6 +193,7 @@ const listTags = (term, display, actions, settings, hide) => {
  * @param {object} actions Use to execute actions on plugin
  */
 const plugin = ({ term, display, actions, settings, hide }) => {
+
   const match = term.match(PLUGIN_REGEX);
 
   if (match) {
