@@ -88,7 +88,7 @@ class EvernoteService {
    */
   async searchNotes(term) {
 
-    const cacheKey = crypto.createHash('md5').update(`notes_${term}`).digest('hex');
+    const cacheKey = crypto.createHash('md5').update(`evernote_notes_${term}`).digest('hex');
     const cached = this.cache.get(cacheKey);
     if (cached) {
       return cached;
@@ -133,7 +133,7 @@ class EvernoteService {
 
     try {
 
-      const cacheKey = crypto.createHash('md5').update(`tags_${filterTerm}`).digest('hex');
+      const cacheKey = crypto.createHash('md5').update(`evernote_tags_${filterTerm}`).digest('hex');
       const cached = this.cache.get(cacheKey);
       if (cached) {
         return cached;
@@ -173,7 +173,7 @@ class EvernoteService {
 
     try {
 
-      const cacheKey = crypto.createHash('md5').update(`nb_${filterTerm}`).digest('hex');
+      const cacheKey = crypto.createHash('md5').update(`evernote_nb_${filterTerm}`).digest('hex');
       const cached = this.cache.get(cacheKey);
       if (cached) {
         return cached;
@@ -209,7 +209,7 @@ class EvernoteService {
 
     try {
 
-      const cacheKey = crypto.createHash('md5').update(`note_contents_${guid}`).digest('hex');
+      const cacheKey = crypto.createHash('md5').update(`evernote_note_contents_${guid}`).digest('hex');
       const cached = this.cache.get(cacheKey);
       if (cached) {
         return cached;
@@ -233,7 +233,7 @@ class EvernoteService {
   async getUser() {
     try {
 
-      const cacheKey = crypto.createHash('md5').update('user').digest('hex');
+      const cacheKey = crypto.createHash('md5').update('evernote_user').digest('hex');
       const cached = this.cache.get(cacheKey);
       if (cached) {
         return cached;
