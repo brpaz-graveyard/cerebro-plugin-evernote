@@ -44,7 +44,7 @@ yarn install
 
 **Launch the plugin**
 
-```npm start````
+```npm start```
 
 - A symlink will be created between the plugin folder and the Cerebro plugins folder.
 - You will need to reload your Cerebro settings (Right click on Cerebro tray icon -> Development -> Reload).
