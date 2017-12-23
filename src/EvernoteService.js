@@ -1,6 +1,10 @@
 
 const Evernote = require('evernote');
-const { memoize } = require('cerebro-tools');
+const RequestTimeoutError = require('./errors/RequestTImeoutError');
+const NodeCache = require('node-cache');
+
+const _ = require('lodash');
+const crypto = require('crypto');
 
 /**
  * Maximum number of results returned when doing a Notes Search.
@@ -29,41 +33,39 @@ const EVERNOTE_PRODUCTION_URL = 'https://www.evernote.com';
 const EVERNOTE_SANDBOX_URL = 'https://www.sandbox.evernote.com';
 
 /**
- * user data cache configuration
+ * The default time to timeout Evernote requests (in miliseconds)
  */
-const USER_MEMOIZE_OPTIONS = {
-  length: false,
-  promise: 'then',
-  maxAge: 5 * 60 * 1000,
-  preFetch: true
-};
+const DEFAULT_REQUEST_TIMEOUT = 15000;
 
-const TAGS_MEMOIZE_OPTIONS = {
-  length: false,
-  promise: 'then',
-  maxAge: 5 * 60 * 1000,
-  preFetch: true
-};
+const NOTES_CACHE_TTL = 3600; // 1h
 
-const NOTEBOOKS_MEMOIZE_OPTIONS = {
-  length: false,
-  promise: 'then',
-  maxAge: 5 * 60 * 1000,
-  preFetch: true
-};
+const TAGS_CACHE_TTL = 7200; // 2h
 
-const NOTE_CONTENTS_MEMOIZE_OPTIONS = {
-  length: false,
-  promise: 'then',
-  maxAge: 5 * 60 * 1000,
-  preFetch: true
-};
+const NOTEBOOKS_CACHE_TTL = 7200; // 2h
+
+const USER_CACHE_TTL = 3600; // 1h
+
+const NOTE_CONTENTS_CACHE_TTL = 7200; // 2h
+
+let instance = null;
 
 /**
  * Evernote Service
  * This class wraps Evernote SDK to provide access to Evernote resources
  */
 class EvernoteService {
+
+  /**
+   * Singleton method.
+   */
+  static getInstance(token, sandbox) {
+
+    if (!instance) {
+      instance = new EvernoteService(token, sandbox);
+    }
+
+    return instance;
+  }
 
   /**
    * Constructor
@@ -75,6 +77,7 @@ class EvernoteService {
   constructor(token, sandbox) {
     this.client = new Evernote.Client({ token: token, sandbox: sandbox });
     this.sandbox = sandbox;
+    this.cache = new NodeCache({ stdTTL: 600 });
   }
 
   /**
@@ -84,6 +87,13 @@ class EvernoteService {
    * @returns {Promise}
    */
   async searchNotes(term) {
+
+    const cacheKey = crypto.createHash('md5').update(`notes_${term}`).digest('hex');
+    const cached = this.cache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const filter = new Evernote.NoteStore.NoteFilter({
       words: term,
       order: Evernote.Types.NoteSortOrder.UPDATED,
@@ -98,8 +108,16 @@ class EvernoteService {
     });
 
     try {
-      return await this.client.getNoteStore()
-        .findNotesMetadata(filter, 0, LIST_NOTES_MAX_RESULTS, spec);
+      const notes = await this.withTimeout(
+        DEFAULT_REQUEST_TIMEOUT,
+        this.client.getNoteStore()
+          .findNotesMetadata(filter, 0, LIST_NOTES_MAX_RESULTS, spec)
+      );
+
+      this.cache.set(cacheKey, notes, NOTES_CACHE_TTL);
+
+      return notes;
+
     } catch (error) {
       return this.handleErrors(error);
     }
@@ -115,7 +133,16 @@ class EvernoteService {
 
     try {
 
-      let tags = await this.client.getNoteStore().listTags();
+      const cacheKey = crypto.createHash('md5').update(`tags_${filterTerm}`).digest('hex');
+      const cached = this.cache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
+      let tags = await this.withTimeout(
+        DEFAULT_REQUEST_TIMEOUT,
+        this.client.getNoteStore().listTags()
+      );
 
       if (filterTerm) {
         tags = tags.filter((tag) => {
@@ -123,7 +150,13 @@ class EvernoteService {
         });
       }
 
-      return tags.slice(0, LIST_TAGS_MAX_RESULTS);
+      tags = _.orderBy(tags, ['name'], ['asc']);
+
+      tags = tags.slice(0, LIST_TAGS_MAX_RESULTS);
+
+      this.cache.set(cacheKey, tags, TAGS_CACHE_TTL);
+
+      return tags;
 
     } catch (error) {
       return this.handleErrors(error);
@@ -140,13 +173,26 @@ class EvernoteService {
 
     try {
 
-      let notebooks = await this.client.getNoteStore().listNotebooks();
+      const cacheKey = crypto.createHash('md5').update(`nb_${filterTerm}`).digest('hex');
+      const cached = this.cache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
+      let notebooks = await this.withTimeout(
+        DEFAULT_REQUEST_TIMEOUT,
+        this.client.getNoteStore().listNotebooks()
+      );
 
       if (filterTerm) {
         notebooks = notebooks.filter((notebook) => {
           return notebook.name.toLowerCase().startsWith(filterTerm.toLowerCase());
         });
       }
+
+      notebooks = _.orderBy(notebooks, ['name'], ['asc']);
+
+      this.cache.set(cacheKey, notebooks, NOTEBOOKS_CACHE_TTL);
 
       return notebooks;
 
@@ -163,7 +209,17 @@ class EvernoteService {
 
     try {
 
-      return await this.client.getNoteStore().getNoteContent(guid);
+      const cacheKey = crypto.createHash('md5').update(`note_contents_${guid}`).digest('hex');
+      const cached = this.cache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
+      const contents = await this.client.getNoteStore().getNoteContent(guid);
+
+      this.cache.set(cacheKey, contents, NOTE_CONTENTS_CACHE_TTL);
+
+      return contents;
 
     } catch (error) {
       return this.handleErrors(error);
@@ -175,16 +231,26 @@ class EvernoteService {
    * @return {Promise}
    */
   async getUser() {
-    return memoize(async () => {
+    try {
 
-      try {
-        const user = await this.client.getUserStore().getUser();
-        return user;
-      } catch (error) {
-        return this.handleErrors(error);
+      const cacheKey = crypto.createHash('md5').update('user').digest('hex');
+      const cached = this.cache.get(cacheKey);
+      if (cached) {
+        return cached;
       }
 
-    }, USER_MEMOIZE_OPTIONS)();
+      const user = await this.withTimeout(
+        DEFAULT_REQUEST_TIMEOUT,
+        this.client.getUserStore().getUser()
+      );
+
+      this.cache.set(cacheKey, user, USER_CACHE_TTL);
+
+      return user;
+
+    } catch (error) {
+      return this.handleErrors(error);
+    }
   }
 
   /**
@@ -210,6 +276,8 @@ class EvernoteService {
         default:
           break;
       }
+    } else if (error instanceof RequestTimeoutError) {
+      throw new Error('Evernote took too long to respond. Please try again.');
     }
 
     throw new Error('An error occurred when fetching data from Evernote');
@@ -244,6 +312,26 @@ class EvernoteService {
     }
 
     return noteUrl;
+  }
+
+  /**
+   * Helper function that allows to add timeouts to promises.
+   * The Evernote API seems quite instable sometimes, so this is really needed to provide a better
+   * Experience to the user.
+   *
+   * @param {integer} millis The number of miliseconds for a request to time out
+   * @param {Promise} promise The promise to apply the timeout.
+   */
+  withTimeout(millis, promise) {
+    const timeout = new Promise((resolve, reject) =>
+      setTimeout(
+        () => reject(new RequestTimeoutError('Request took too long to respond')),
+        millis
+      ));
+    return Promise.race([
+      promise,
+      timeout
+    ]);
   }
 }
 

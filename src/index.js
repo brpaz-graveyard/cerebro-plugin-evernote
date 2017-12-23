@@ -1,17 +1,22 @@
 
 const PLUGIN_NAME = 'Evernote';
 const PLUGIN_KEYWORD = 'evernote';
-const PLUGIN_REGEX = /evernote\s(.*)/;
+const PLUGIN_REGEX = /evernote(.*)/;
 
 const _ = require('lodash');
 
 const icon = require('../assets/icon.png');
-const EvernoteService = require('./evernoteService');
+const EvernoteService = require('./EvernoteService');
+
+let evernoteService = null;
 
 /**
  * Preview components
  */
+// eslint-disable-next-line no-unused-vars
 const { Preload, Loading } = require('cerebro-ui');
+
+// eslint-disable-next-line no-unused-vars
 const NoteContents = require('./Preview/NoteContents');
 
 const displayLoader = (display) => {
@@ -28,6 +33,16 @@ const hideLoader = (hide) => {
 
 const displayMainMenu = (display, actions) => {
   const menu = [
+    {
+      title: 'Search Notes',
+      subtitle: 'Please keep typing to search notes',
+      icon: icon,
+      onSelect: (event) => {
+        event.preventDefault();
+        actions.replaceTerm(`${PLUGIN_KEYWORD} `);
+        return false;
+      }
+    },
     {
       title: 'List Notebooks',
       icon: icon,
@@ -48,13 +63,20 @@ const displayMainMenu = (display, actions) => {
         return false;
       }
     },
+    {
+      title: 'Open Evernote Web',
+      icon: icon,
+      onSelect: () => {
+        actions.open('https://www.evernote.com/Login.action');
+      }
+    },
   ];
   display(menu);
 };
 
 const searchNotes = _.debounce((term, display, actions, settings, hide) => {
 
-  const evernoteService = new EvernoteService(settings.accessToken, settings.sandbox);
+  evernoteService = EvernoteService.getInstance(settings.accessToken, settings.sandbox);
 
   let results = [];
 
@@ -67,12 +89,12 @@ const searchNotes = _.debounce((term, display, actions, settings, hide) => {
     const user = values[0];
     const notesList = values[1];
 
-    hideLoader(hide);
-
     if (notesList.notes.length === 0) {
+      hideLoader(hide);
+
       display({
         icon: icon,
-        title: 'No results matching your search criteria'
+        title: 'No notes found matching your criteria'
       });
     } else {
       results = notesList.notes.map((note) => {
@@ -86,27 +108,30 @@ const searchNotes = _.debounce((term, display, actions, settings, hide) => {
           },
           getPreview: () => {
             const promise = evernoteService.getNoteContent(note.guid);
-            return <Preload key={note.guid} promise={promise}>
-              {(promiseResult) => <NoteContents key={note.guid} contents={promiseResult} />}
-            </Preload >
+            return <Preload key={note.guid} promise={promise} loader={<Loading />}>
+              {promiseResult => <NoteContents key={note.guid} contents={promiseResult} />}
+            </Preload>;
           }
         };
       });
+
+      hideLoader(hide);
+
       display(results, actions);
     }
   }).catch((err) => {
     hideLoader(hide);
     display({
       icon: icon,
-      title: 'Evernote Error',
+      title: 'An error occurred when connecting to Evernote',
       subtitle: err.message
     });
   });
-}, 200);
+}, 300);
 
 const listNotebooks = _.debounce((term, display, actions, settings, hide) => {
 
-  const evernoteService = new EvernoteService(settings.accessToken, settings.sandbox);
+  evernoteService = EvernoteService.getInstance(settings.accessToken, settings.sandbox);
 
   let results = [];
 
@@ -138,15 +163,15 @@ const listNotebooks = _.debounce((term, display, actions, settings, hide) => {
 
     display({
       icon: icon,
-      title: 'Evernote Error',
+      title: 'An error occurred when connecting to Evernote',
       subtitle: err.message
     });
   });
-}, 200);
+}, 300);
 
 const listTags = _.debounce((term, display, actions, settings, hide) => {
 
-  const evernoteService = new EvernoteService(settings.accessToken, settings.sandbox);
+  evernoteService = EvernoteService.getInstance(settings.accessToken, settings.sandbox);
 
   let results = [];
 
@@ -182,16 +207,9 @@ const listTags = _.debounce((term, display, actions, settings, hide) => {
       subtitle: err.message
     });
   });
-}, 200);
+}, 300);
 
-/**
- * Plugin entrypoint.
- * @see https://github.com/KELiON/cerebro/blob/master/docs/plugins.md for documentation
- *
- * @param {string} term The searched term
- * @param {object} dsiplay Display object used for rendering results
- * @param {object} actions Use to execute actions on plugin
- */
+
 const plugin = ({ term, display, actions, settings, hide }) => {
 
   const match = term.match(PLUGIN_REGEX);
@@ -200,16 +218,16 @@ const plugin = ({ term, display, actions, settings, hide }) => {
 
     if (!settings.accessToken) {
       display({
-        title: 'Configuration required',
-        subtitle: 'Please set your Evernote access token in the Plugin settings',
+        title: 'Action required',
+        subtitle: 'Please set your Evernote access token in the Plugin settings to be able to use this plugin',
         icon: icon,
-        term: 'plugins evernote'
+        term: `${PLUGIN_KEYWORD} settings`
       });
 
       return;
     }
 
-    const searchParts = match[1].split(' ');
+    const searchParts = match[1].trim().split(' ');
 
     switch (searchParts[0]) {
       case '':
